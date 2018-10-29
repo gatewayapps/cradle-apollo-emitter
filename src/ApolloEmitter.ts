@@ -33,10 +33,14 @@ export default class ApolloEmitter implements ICradleEmitter {
   }
 
   public async emitSchema(schema: CradleSchema) {
+    console.log('IN EMIT SCHEMA')
     schema.Models.forEach((model) => {
       if (!this.options.options.isModelToplevel || this.options.options.isModelToplevel(model)) {
         this.writeTypeDefsForModel(model)
-        this.writeResolversForModel(model)
+
+        if (!this.options.options.shouldGenerateResolvers || this.options.options.shouldGenerateResolvers(model)) {
+          this.writeResolversForModel(model)
+        }
       }
     })
 
@@ -234,10 +238,14 @@ ${localFields.join('\n')}
 
   private writeTypeDefsForModel(model: CradleModel) {
     const modelTypeDefs = this.getTypeDefsForModel(model)
-    const modelQueries = this.getQueryDefsForModel(model)
-    const modelMutations = this.getMutationDefsForModel(model)
 
-    const apolloSchema = [modelTypeDefs, modelQueries, modelMutations].join('\n\n')
+    const modelQueries =
+      (!this.options.options.shouldGenerateResolvers || this.options.options.shouldGenerateResolvers(model)) && this.getQueryDefsForModel(model)
+
+    const modelMutations =
+      (!this.options.options.shouldGenerateResolvers || this.options.options.shouldGenerateResolvers(model)) && this.getMutationDefsForModel(model)
+
+    const apolloSchema = _.compact([modelTypeDefs, modelQueries, modelMutations]).join('\n\n')
 
     const typeDefsPath = join(this.options.options.outputDirectory, model.Name, 'typedefs.graphql')
 

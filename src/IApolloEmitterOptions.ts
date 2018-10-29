@@ -8,6 +8,7 @@ export interface IApolloEmitterOptions {
   readonly verbose: boolean
   readonly outputType: string
   readonly isModelToplevel?: (model: CradleModel) => boolean
+  readonly shouldGenerateResolvers?: (model: CradleModel) => boolean
   readonly shouldTypeIncludeProperty?: (model: CradleModel, propertyName: string, property: PropertyType) => boolean
   readonly shouldTypeIncludeReference?: (model: CradleModel, referenceName: string, modelReference: ModelReference) => boolean
   readonly shouldTypeIncludeOperation?: (model: CradleModel, operationName: string, operation: ICradleOperation) => boolean
