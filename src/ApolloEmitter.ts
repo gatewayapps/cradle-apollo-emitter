@@ -33,7 +33,6 @@ export default class ApolloEmitter implements ICradleEmitter {
   }
 
   public async emitSchema(schema: CradleSchema) {
-    console.log('IN EMIT SCHEMA')
     schema.Models.forEach((model) => {
       if (!this.options.options.isModelToplevel || this.options.options.isModelToplevel(model)) {
         this.writeTypeDefsForModel(model)
