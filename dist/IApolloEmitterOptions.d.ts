@@ -1,14 +1,14 @@
-import { CradleModel } from '@gatewayapps/cradle';
+import { CradleModel, ICradleOperation } from '@gatewayapps/cradle';
 import ModelReference from '@gatewayapps/cradle/dist/lib/ModelReference';
+import PropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/PropertyType';
 export interface IApolloEmitterOptions {
     readonly overwriteExisting: boolean;
-    readonly outputPath: string;
-    readonly modelOutputPath?: (modelName: string) => string;
+    readonly outputDirectory: string;
+    readonly verbose: boolean;
     readonly isModelToplevel?: (model: CradleModel) => boolean;
-    readonly getImportsForModel?: (model: CradleModel) => string[];
-    readonly getRootImports: (topLevelModels: CradleModel[]) => string[];
-    readonly getResolverForModel: (model: CradleModel, resolverType: 'Single' | 'Paginated') => any;
-    readonly getResolverForReference?: (model: CradleModel, referenceName: string, modelReference: ModelReference) => any;
+    readonly shouldTypeIncludeProperty?: (model: CradleModel, propertyName: string, property: PropertyType) => boolean;
+    readonly shouldTypeIncludeReference?: (model: CradleModel, referenceName: string, modelReference: ModelReference) => boolean;
+    readonly shouldTypeIncludeOperation?: (model: CradleModel, operationName: string, operation: ICradleOperation) => boolean;
     readonly onComplete: (filesEmitted: string[]) => void;
 }
 //# sourceMappingURL=IApolloEmitterOptions.d.ts.map

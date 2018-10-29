@@ -1,4 +1,4 @@
-import { CradleModel, CradleSchema, EmitterOptions, IConsole, ICradleEmitter } from '@gatewayapps/cradle'
+import { CradleModel, CradleSchema, EmitterOptions, IConsole, ICradleEmitter, ICradleOperation } from '@gatewayapps/cradle'
 import ArrayPropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ArrayPropertyType'
 import ModelReferenceType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ModelReferenceType'
 import PropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/PropertyType'
@@ -6,18 +6,16 @@ import colors from 'colors'
 import { existsSync, writeFileSync } from 'fs'
 import { ensureDirSync, writeFile } from 'fs-extra'
 import _ from 'lodash'
-import path, { dirname, extname } from 'path'
+import path, { dirname, extname, join } from 'path'
 import pluralize from 'pluralize'
 import { IApolloEmitterOptions } from './IApolloEmitterOptions'
 
 class ApolloModel {
   public Schema: string
-  public Resolvers: Record<string, string>
   public Model: CradleModel
 
-  constructor(schema: string, resolvers: Record<string, string>, model: CradleModel) {
+  constructor(schema: string, model: CradleModel) {
     this.Schema = schema
-    this.Resolvers = resolvers
     this.Model = model
   }
 }
@@ -25,6 +23,8 @@ class ApolloModel {
 export default class ApolloEmitter implements ICradleEmitter {
   public console?: IConsole
   public options!: EmitterOptions<IApolloEmitterOptions>
+
+  public getOperation
   private Models: ApolloModel[] = []
   private filesEmitted: string[] = []
   public async prepareEmitter(options: EmitterOptions<IApolloEmitterOptions>, console: IConsole) {
@@ -34,57 +34,104 @@ export default class ApolloEmitter implements ICradleEmitter {
 
   public async emitSchema(schema: CradleSchema) {
     schema.Models.forEach((model) => {
-      const apolloSchema = this.getSchemaForModel(model)
-      const apolloResolvers = this.getResolversForModel(model)
-
-      this.Models.push(new ApolloModel(apolloSchema, apolloResolvers, model))
+      if (!this.options.options.isModelToplevel || this.options.options.isModelToplevel(model)) {
+        this.writeTypeDefsForModel(model)
+        this.writeResolversForModel(model)
+      }
     })
-    if (this.options.options.modelOutputPath) {
-      this.emitToMultipleFiles()
-    } else {
-      this.emitToSingleFile()
-    }
-    // actually emit the files
+
+    // write index.ts file for schema.
 
     if (this.options.options.onComplete !== undefined) {
+      if (this.options.options.verbose) {
+        this.console!.log(`Calling onComplete with [ ${this.filesEmitted.join(', ') || 'Empty Array'} ]`)
+      }
       this.options.options.onComplete(this.filesEmitted)
     }
   }
 
-  public getResolversForModel(model: CradleModel): Record<string, string> {
-    const resolvers: Record<string, string> = {}
-    if (this.options.options.getResolverForReference) {
-      const referenceNames = model.References ? Object.keys(model.References) : []
-      referenceNames.forEach((rn) => {
-        resolvers[rn] = this.options.options.getResolverForReference!(model, rn, model.References[rn])
-        if (!resolvers[rn]) {
-          throw new Error(`${model.Name}.${rn} does not define a resolver.  All references must define a resolver`)
-        } else {
-          resolvers[rn] = resolvers[rn].toString()
-        }
-      })
+  public getMutationDefsForModel(model: CradleModel): string {
+    const operationNames = Object.keys(model.Operations)
+    const mutationDefs: string[] = []
+
+    operationNames.forEach((opName) => {
+      const operationArgs = this.getArgsTypeNameForOperation(opName)
+      mutationDefs.push(
+        `\t${opName}(data: ${operationArgs}!): ${this.getGraphqlTypeFromPropertyType(model.Operations[opName]!.Returns).replace('!', '')}`
+      )
+    })
+
+    if (mutationDefs.length > 0) {
+      return `type Mutation {
+${mutationDefs.join('\n')}
+}`
+    } else {
+      return ''
     }
-    return resolvers
   }
 
-  public getSchemaForModel(model: CradleModel): string {
-    const localFields: string[] = []
+  public getQueryDefsForModel(model: CradleModel): string {
+    const singularQueryNameBase = _.camelCase(pluralize(model.Name, 1))
+    const pluralQueryName = _.camelCase(pluralize(model.Name, 2))
 
+    const singularQueries: string[] = []
+    const identifiers = this.getIdentifiersForModel(model)
+    identifiers.forEach((fieldName) => {
+      const queryName = `${singularQueryNameBase}By${_.startCase(fieldName).replace(/\s/g, '')}`
+      singularQueries.push(
+        `\t${queryName}(${_.camelCase(fieldName)}: ${this.getGraphqlTypeFromPropertyType(model.Properties[fieldName]!)}): ${model.Name}`
+      )
+    })
+
+    return `type Query {
+\t${pluralQueryName}(offset: Int, limit: Int): [${model.Name}]
+${singularQueries.join('\n')}
+}`
+  }
+
+  public getTypeDefsForModel(model: CradleModel): string {
+    const localFields: string[] = []
     const fieldNames = Object.keys(model.Properties)
     const referenceNames = model.References ? Object.keys(model.References) : []
 
     fieldNames.forEach((fn) => {
-      localFields.push(`\t\t${fn}: ${this.getGraphqlTypeFromPropertyType(model.Properties[fn])}`)
+      if (!this.options.options.shouldTypeIncludeProperty || this.options.options.shouldTypeIncludeProperty(model, fn, model.Properties[fn])) {
+        localFields.push(`\t${fn}: ${this.getGraphqlTypeFromPropertyType(model.Properties[fn])}`)
+      }
     })
     referenceNames.forEach((rn) => {
-      localFields.push(`\t\t${rn}: ${model.References[rn]!.ForeignModel}`)
+      if (!this.options.options.shouldTypeIncludeReference || this.options.options.shouldTypeIncludeReference(model, rn, model.References[rn])) {
+        localFields.push(`\t${rn}: ${model.References[rn]!.ForeignModel}`)
+      }
     })
 
-    return `
-  type ${model.Name} {
+    const typeDefs: string[] = []
+    typeDefs.push(`type ${model.Name} {
 ${localFields.join('\n')}
+}`)
+
+    if (model.Operations) {
+      const operationNames = Object.keys(model.Operations)
+      operationNames.forEach((opName) => {
+        const operationArgsTypeDef = this.getSchemaForOperationArgs(opName, model.Operations[opName])
+        typeDefs.push(operationArgsTypeDef)
+      })
+    }
+
+    return typeDefs.join('\n\n')
   }
-`
+
+  public getSchemaForOperationArgs(operationName: string, operation: ICradleOperation): string {
+    const localFields: string[] = []
+    const fieldNames = Object.keys(operation.Arguments)
+    fieldNames.forEach((fn) => {
+      localFields.push(`\t${fn}: ${this.getGraphqlTypeFromPropertyType(operation.Arguments[fn])}`)
+    })
+
+    const argsTypeName = this.getArgsTypeNameForOperation(operationName)
+    return `input ${argsTypeName} {
+${localFields.join('\n')}
+}`
   }
 
   public getGraphqlTypeFromPropertyType(propertyType: PropertyType | string) {
@@ -127,6 +174,89 @@ ${localFields.join('\n')}
     }
   }
 
+  private getStubMethodFor(methodName: string): string {
+    return `${methodName}: (obj, args, context, info) => {
+      // Insert your ${methodName} implementation here
+      throw new Error('${methodName} is not implemented')
+    }`
+  }
+
+  private writeResolversForModel(model: CradleModel) {
+    const singularQueryNameBase = _.camelCase(pluralize(model.Name, 1))
+    const pluralQueryName = _.camelCase(pluralize(model.Name, 2))
+
+    const outputFilename = this.options.options.outputType === 'typescript' ? 'resolvers.ts' : 'resolvers.js'
+
+    const modelResolverFilePath = path.join(this.options.options.outputDirectory, model.Name, outputFilename)
+    const queries: string[] = [pluralQueryName]
+    const mutations: string[] = []
+    const references: string[] = []
+    const identifiers = this.getIdentifiersForModel(model)
+    identifiers.forEach((fieldName) => {
+      queries.push(`${singularQueryNameBase}By${_.startCase(fieldName).replace(/\s/g, '')}`)
+    })
+
+    queries.forEach((q, qi) => {
+      queries[qi] = this.getStubMethodFor(q)
+    })
+
+    if (model.Operations) {
+      const operationNames = Object.keys(model.Operations)
+      operationNames.forEach((opName) => {
+        mutations.push(this.getStubMethodFor(opName))
+      })
+    }
+
+    if (model.References) {
+      const referenceNames = Object.keys(model.References)
+      referenceNames.forEach((refName) => {
+        references.push(this.getStubMethodFor(refName))
+      })
+    }
+
+    const exportClause = this.options.options.outputType === 'typescript' ? 'export default' : 'module.exports ='
+
+    const resolverBody = `${exportClause} {
+  Query: {
+    ${queries.join(',\n')}
+  },
+  Mutation: {
+    ${mutations.join(',\n')}
+  },
+  ${model.Name}: {
+    ${references.join(',\n')}
+  }
+}
+    `
+
+    this.writeContentsToFile(resolverBody, modelResolverFilePath)
+  }
+
+  private writeTypeDefsForModel(model: CradleModel) {
+    const modelTypeDefs = this.getTypeDefsForModel(model)
+    const modelQueries = this.getQueryDefsForModel(model)
+    const modelMutations = this.getMutationDefsForModel(model)
+
+    const apolloSchema = [modelTypeDefs, modelQueries, modelMutations].join('\n\n')
+
+    const typeDefsPath = join(this.options.options.outputDirectory, model.Name, 'typedefs.graphql')
+
+    this.writeContentsToFile(apolloSchema, typeDefsPath)
+  }
+
+  private getIdentifiersForModel(model: CradleModel): string[] {
+    const fieldNames = Object.keys(model.Properties)
+
+    return fieldNames.filter((fn) => {
+      const field = model.Properties[fn]
+      return field && (field.IsPrimaryKey || field.Unique || field.TypeName === 'UniqueIdentifier') && !field.AllowNull
+    })
+  }
+
+  private getArgsTypeNameForOperation(operationName: string): string {
+    return `${_.startCase(operationName).replace(/\s/g, '')}Args`
+  }
+
   /**
    * Writes contents to path and adds path to emittedFiles array.  If overwriteExisting is false and the file DOES already exist
    * this method does nothing
@@ -135,146 +265,16 @@ ${localFields.join('\n')}
    */
   private writeContentsToFile(contents: string, filePath: string) {
     if (existsSync(filePath) && !this.options.options.overwriteExisting) {
-      this.console!.warn(`${filePath} already exists.  Skipping.`)
+      this.console!.warn(colors.gray(`Not writing ${filePath} as it already exists and overwrite existing is set to false.`))
     } else {
-      console.log(`Writing file: ${filePath}`)
+      if (this.options.options.verbose) {
+        this.console!.log(colors.green(`Writing to ${filePath}`))
+        this.console!.log(colors.yellow(contents))
+      }
       const dir = dirname(filePath)
       ensureDirSync(dir)
       writeFileSync(filePath, contents, 'utf8')
       this.filesEmitted.push(filePath)
     }
-  }
-
-  private emitToMultipleFiles() {
-    const models: Array<{ modelName: string; filePath: string; topLevel: boolean }> = []
-
-    this.Models.forEach((m) => {
-      const resolverNames = Object.keys(m.Resolvers)
-      const imports = this.options.options.getImportsForModel!(m.Model)
-      const schemaPart = `export const typeDef = \`${m.Schema}\``
-      const isTopLevel = this.options.options.isModelToplevel!(m.Model)
-      const resolverPart = isTopLevel
-        ? `
-      export const resolvers = {
-        ${m.Model.Name}: {
-          ${resolverNames.map((rn) => `    ${rn}: ${m.Resolvers[rn].toString()}`).join(',\n')}
-        }
-      }`
-        : ''
-
-      const fileContents = `
-${imports.join('\n')}
-${schemaPart}
-
-${resolverPart}
-      `
-
-      const modelFilename = this.options.options.modelOutputPath!(m.Model.Name)
-      models.push({ modelName: m.Model.Name, filePath: modelFilename, topLevel: isTopLevel })
-      this.writeContentsToFile(fileContents, modelFilename)
-    })
-
-    const rootQuery = this.getRootQuery()
-    const rootResolvers = this.getRootResolvers()
-    const allResolvers: string[] = []
-    const importStatements = models.map((m) => {
-      const parts: string[] = []
-      parts.push(`typeDef as ${m.modelName}`)
-      if (m.topLevel) {
-        allResolvers.push(`${_.camelCase(m.modelName)}Resolvers`)
-        parts.push(`resolvers as ${_.camelCase(m.modelName)}Resolvers`)
-      }
-
-      const relativePath = path.relative(dirname(this.options.options.outputPath), m.filePath).replace(/\\/g, '/') + '/'
-      const relativeParts = relativePath.split('.')
-      relativeParts.splice(relativeParts.length - 1, 1)
-      const finalName = relativeParts.join('.')
-
-      return `import {${parts.join(', ')}} from './${finalName}'`
-    })
-    importStatements.push(`import { GraphQLScalarType } from 'graphql'`)
-    importStatements.push(`import { Kind } from 'graphql/language'`)
-    importStatements.push(`import { merge } from 'lodash'`)
-    importStatements.push(`import { makeExecutableSchema } from 'apollo-server'`)
-
-    const rootImports = this.getRootImports()
-
-    importStatements.push(...rootImports)
-
-    const rootFileContents = `
-${importStatements.join('\n')}
-
-const Query = \`
-
-scalar Date
-
-${rootQuery}\`
-
-const resolvers = {
-  Date: new GraphQLScalarType({
-    name: 'Date',
-    description: 'Date custom scalar type',
-    parseValue(value) {
-      return new Date(value) // value from the client
-    },
-    serialize(value) {
-      return value.getTime() // value sent to the client
-    },
-    parseLiteral(ast) {
-      if (ast.kind === Kind.INT) {
-        return new Date(ast.value) // ast value is always in string format
-      }
-      return null
-    }
-  }),
-  Query: {
-${rootResolvers}
-  }
-}
-
-export const schema = makeExecutableSchema({
-  typeDefs: [ Query, ${models.map((m) => m.modelName).join(', ')} ],
-  resolvers: merge(resolvers, ${allResolvers.join(', ')})
-})
-
-`
-    this.writeContentsToFile(rootFileContents, this.options.options.outputPath)
-  }
-
-  private getRootQuery(): string {
-    const rootQueries: string[] = []
-    this.Models.forEach((m) => {
-      if (this.options.options.isModelToplevel!(m.Model)) {
-        rootQueries.push(`${pluralize(_.camelCase(m.Model.Name))}(offset: Int, limit: Int): [${m.Model.Name}]`)
-        rootQueries.push(`${_.camelCase(m.Model.Name)}(id: ID!): ${m.Model.Name}`)
-      }
-    })
-    return `
-type Query {
-  ${rootQueries.join('\n\t')}
-}
-    `
-  }
-
-  private getRootImports(): string[] {
-    const topLevelModels = this.Models.filter((model) => this.options.options.isModelToplevel!(model.Model)).map((model) => model.Model)
-    return this.options.options.getRootImports(topLevelModels)
-  }
-
-  private getRootResolvers(): string {
-    const rootResolvers: string[] = []
-    this.Models.forEach((m) => {
-      if (this.options.options.isModelToplevel!(m.Model)) {
-        const singleResolver = this.options.options.getResolverForModel(m.Model, 'Single')
-        const paginatedResolver = this.options.options.getResolverForModel(m.Model, 'Paginated')
-        rootResolvers.push(`${pluralize(_.camelCase(m.Model.Name))}: ${paginatedResolver.toString()}`)
-        rootResolvers.push(`${_.camelCase(m.Model.Name)}: ${singleResolver.toString()}`)
-      }
-    })
-    return rootResolvers.join(',\n')
-  }
-
-  private emitToSingleFile() {
-    const allTypes = this.Models.map((m) => m.Schema).join('\n\n')
   }
 }
