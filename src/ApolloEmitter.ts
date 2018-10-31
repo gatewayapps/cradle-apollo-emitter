@@ -237,6 +237,7 @@ ${resultParts.join('\n')}
           }
           case 'String': {
             resultParts.push(`\t${pn}_contains: ${gqlType}`)
+            resultParts.push(`\t${pn}_notContains: ${gqlType}`)
             resultParts.push(`\t${pn}_startsWith: ${gqlType}`)
             resultParts.push(`\t${pn}_endsWith: ${gqlType}`)
             resultParts.push(`\t${pn}_equals: ${gqlType}`)
