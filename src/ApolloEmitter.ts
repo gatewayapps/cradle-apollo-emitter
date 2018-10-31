@@ -37,7 +37,7 @@ export default class ApolloEmitter implements ICradleEmitter {
       if (!this.options.options.isModelToplevel || this.options.options.isModelToplevel(model)) {
         this.writeTypeDefsForModel(model)
 
-        if (!this.options.options.shouldGenerateResolvers || this.options.options.shouldGenerateResolvers(model)) {
+        if (this.shouldGenerateResolvers(model) && this.options.options.shouldOutputResolverFiles !== false) {
           this.writeResolversForModel(model)
         }
       }
@@ -77,18 +77,24 @@ ${mutationDefs.join('\n')}
     const singularQueryNameBase = _.camelCase(pluralize(model.Name, 1))
     const pluralQueryName = _.camelCase(pluralize(model.Name, 2))
 
-    const singularQueries: string[] = []
-    const identifiers = this.getIdentifiersForModel(model)
-    identifiers.forEach((fieldName) => {
-      const queryName = `${singularQueryNameBase}By${_.startCase(fieldName).replace(/\s/g, '')}`
-      singularQueries.push(
-        `\t${queryName}(${_.camelCase(fieldName)}: ${this.getGraphqlTypeFromPropertyType(model.Properties[fieldName]!)}): ${model.Name}`
-      )
-    })
+    const filterParts: string[] = []
+    filterParts.push(this.generateFilterInputType(model))
+    filterParts.push(this.generateUniqueFilterInputType(model))
+    const filterTypeDefs = filterParts.join('\n\n')
 
-    return `type Query {
-\t${pluralQueryName}(offset: Int, limit: Int): [${model.Name}]
-${singularQueries.join('\n')}
+    const collectionTypeDef = `type ${model.Name}Meta {
+\tcount: Int!
+}`
+
+    return `
+${collectionTypeDef}
+
+${filterTypeDefs}
+
+type Query {
+\t${pluralQueryName}(offset: Int, limit: Int, filter: ${model.Name}Filter): [${model.Name}!]!
+\t${pluralQueryName}Meta(filter: ${model.Name}Filter): ${model.Name}Meta
+\t${singularQueryNameBase}(where: ${model.Name}UniqueFilter): ${model.Name}
 }`
   }
 
@@ -104,7 +110,9 @@ ${singularQueries.join('\n')}
     })
     referenceNames.forEach((rn) => {
       if (!this.options.options.shouldTypeIncludeReference || this.options.options.shouldTypeIncludeReference(model, rn, model.References[rn])) {
-        localFields.push(`\t${rn}: ${model.References[rn]!.ForeignModel}`)
+        const referenceName =
+          model.References[rn]!.RelationType === 2 ? `[${model.References[rn]!.ForeignModel}]` : model.References[rn]!.ForeignModel
+        localFields.push(`\t${rn}: ${referenceName}`)
       }
     })
 
@@ -128,7 +136,9 @@ ${localFields.join('\n')}
     const localFields: string[] = []
     const fieldNames = Object.keys(operation.Arguments)
     fieldNames.forEach((fn) => {
-      localFields.push(`\t${fn}: ${this.getGraphqlTypeFromPropertyType(operation.Arguments[fn])}`)
+      const prop = operation.Arguments[fn]
+      const gqlType = this.getGraphqlTypeFromPropertyType(prop)
+      localFields.push(`\t${fn}: ${gqlType}`)
     })
 
     const argsTypeName = this.getArgsTypeNameForOperation(operationName)
@@ -138,7 +148,14 @@ ${localFields.join('\n')}
   }
 
   public getGraphqlTypeFromPropertyType(propertyType: PropertyType | string) {
-    const requiredToken = propertyType instanceof PropertyType && propertyType.AllowNull ? '' : '!'
+    let requiredToken = ''
+    if (typeof propertyType === 'object' && !propertyType.AllowNull) {
+      requiredToken = '!'
+    } else if (typeof propertyType === 'string') {
+      if (propertyType.indexOf('?') === -1) {
+        requiredToken = '!'
+      }
+    }
 
     const propertyTypeName = typeof propertyType === 'string' ? propertyType : propertyType.TypeName
 
@@ -170,10 +187,84 @@ ${localFields.join('\n')}
         return `Int${requiredToken}`
       case 'String':
         return `String${requiredToken}`
-      case 'UniqueIdentifier':
-        return `ID${requiredToken}`
+      case 'UniqueIdentifier': {
+        if (this.options.options.useMongoObjectIds) {
+          return `ObjectID${requiredToken}`
+        } else {
+          return `ID${requiredToken}`
+        }
+      }
+
       default:
         throw new Error(`Property type not supported in cradle-apollo-emitter: ${propertyTypeName}`)
+    }
+  }
+
+  private generateUniqueFilterInputType(model: CradleModel): string {
+    const propNames = this.getIdentifiersForModel(model)
+    const resultParts: string[] = []
+    propNames.forEach((pn) => {
+      const prop: PropertyType = model.Properties[pn]
+      const gqlType = this.getGraphqlTypeFromPropertyType(prop.TypeName)
+      resultParts.push(`\t${pn}: ${gqlType}`)
+    })
+    if (resultParts.length > 0) {
+      return `input ${model.Name}UniqueFilter {
+${resultParts.join('\n')}
+}`
+    } else {
+      return ''
+    }
+  }
+
+  private generateFilterInputType(model: CradleModel): string {
+    const propNames = Object.keys(model.Properties)
+    const resultParts: string[] = []
+    propNames.forEach((pn) => {
+      const prop: PropertyType = model.Properties[pn]
+      if (prop && prop.TypeName && ['DateTime', 'Decimal', 'Integer', 'String', 'Boolean', 'UniqueIdentifier'].find((x) => x === prop.TypeName)) {
+        const gqlType = `${this.getGraphqlTypeFromPropertyType(prop.TypeName)}`
+
+        switch (prop.TypeName) {
+          case 'DateTime':
+          case 'Decimal':
+          case 'Integer': {
+            resultParts.push(`\t${pn}_lessThan: ${gqlType}`)
+            resultParts.push(`\t${pn}_greaterThan: ${gqlType}`)
+            resultParts.push(`\t${pn}_equals: ${gqlType}`)
+            resultParts.push(`\t${pn}_notEquals: ${gqlType}`)
+            return
+          }
+          case 'String': {
+            resultParts.push(`\t${pn}_contains: ${gqlType}`)
+            resultParts.push(`\t${pn}_startsWith: ${gqlType}`)
+            resultParts.push(`\t${pn}_endsWith: ${gqlType}`)
+            resultParts.push(`\t${pn}_equals: ${gqlType}`)
+            resultParts.push(`\t${pn}_notEquals: ${gqlType}`)
+            return
+          }
+          case 'Boolean': {
+            resultParts.push(`\t${pn}_equals: ${gqlType}`)
+            resultParts.push(`\t${pn}_notEquals: ${gqlType}`)
+            return
+          }
+          case 'UniqueIdentifier': {
+            resultParts.push(`\t${pn}_in: [${gqlType}]`)
+            resultParts.push(`\t${pn}_equals: ${gqlType}`)
+            resultParts.push(`\t${pn}_notEquals: ${gqlType}`)
+            return
+          }
+        }
+      }
+    })
+    if (resultParts.length > 0) {
+      return `input ${model.Name}Filter {
+  or: [${model.Name}Filter!]
+  and: [${model.Name}Filter!]
+${resultParts.join('\n')}
+}`
+    } else {
+      return ''
     }
   }
 
@@ -191,13 +282,9 @@ ${localFields.join('\n')}
     const outputFilename = this.options.options.outputType === 'typescript' ? 'resolvers.ts' : 'resolvers.js'
 
     const modelResolverFilePath = path.join(this.options.options.outputDirectory, model.Name, outputFilename)
-    const queries: string[] = [pluralQueryName]
+    const queries: string[] = [pluralQueryName, `${pluralQueryName}Meta`, singularQueryNameBase]
     const mutations: string[] = []
     const references: string[] = []
-    const identifiers = this.getIdentifiersForModel(model)
-    identifiers.forEach((fieldName) => {
-      queries.push(`${singularQueryNameBase}By${_.startCase(fieldName).replace(/\s/g, '')}`)
-    })
 
     queries.forEach((q, qi) => {
       queries[qi] = this.getStubMethodFor(q)
@@ -231,18 +318,19 @@ ${localFields.join('\n')}
   }
 }
     `
-
     this.writeContentsToFile(resolverBody, modelResolverFilePath)
+  }
+
+  private shouldGenerateResolvers(model: CradleModel) {
+    return !this.options.options.shouldGenerateResolvers || this.options.options.shouldGenerateResolvers(model)
   }
 
   private writeTypeDefsForModel(model: CradleModel) {
     const modelTypeDefs = this.getTypeDefsForModel(model)
 
-    const modelQueries =
-      (!this.options.options.shouldGenerateResolvers || this.options.options.shouldGenerateResolvers(model)) && this.getQueryDefsForModel(model)
+    const modelQueries = this.shouldGenerateResolvers(model) && this.getQueryDefsForModel(model)
 
-    const modelMutations =
-      (!this.options.options.shouldGenerateResolvers || this.options.options.shouldGenerateResolvers(model)) && this.getMutationDefsForModel(model)
+    const modelMutations = this.shouldGenerateResolvers(model) && this.getMutationDefsForModel(model)
 
     const apolloSchema = _.compact([modelTypeDefs, modelQueries, modelMutations]).join('\n\n')
 
