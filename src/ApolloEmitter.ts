@@ -206,7 +206,7 @@ ${localFields.join('\n')}
     propNames.forEach((pn) => {
       const prop: PropertyType = model.Properties[pn]
       const gqlType = this.getGraphqlTypeFromPropertyType(prop.TypeName)
-      resultParts.push(`\t${pn}: ${gqlType}`)
+      resultParts.push(`\t${pn}: ${gqlType.replace('!', '')}`)
     })
     if (resultParts.length > 0) {
       return `input ${model.Name}UniqueFilter {
@@ -223,7 +223,7 @@ ${resultParts.join('\n')}
     propNames.forEach((pn) => {
       const prop: PropertyType = model.Properties[pn]
       if (prop && prop.TypeName && ['DateTime', 'Decimal', 'Integer', 'String', 'Boolean', 'UniqueIdentifier'].find((x) => x === prop.TypeName)) {
-        const gqlType = `${this.getGraphqlTypeFromPropertyType(prop.TypeName)}`
+        const gqlType = this.getGraphqlTypeFromPropertyType(prop.TypeName).replace('!', '')
 
         switch (prop.TypeName) {
           case 'DateTime':
