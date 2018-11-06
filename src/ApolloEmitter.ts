@@ -137,7 +137,7 @@ ${localFields.join('\n')}
     const fieldNames = Object.keys(operation.Arguments)
     fieldNames.forEach((fn) => {
       const prop = operation.Arguments[fn]
-      const gqlType = this.getGraphqlTypeFromPropertyType(prop)
+      const gqlType = this.getGraphqlTypeFromPropertyType(prop, true)
       localFields.push(`\t${fn}: ${gqlType}`)
     })
 
@@ -147,7 +147,7 @@ ${localFields.join('\n')}
 }`
   }
 
-  public getGraphqlTypeFromPropertyType(propertyType: PropertyType | string) {
+  public getGraphqlTypeFromPropertyType(propertyType: PropertyType | string, forInput: boolean = false) {
     let requiredToken = ''
     if (typeof propertyType === 'object' && !propertyType.AllowNull) {
       requiredToken = '!'
@@ -165,14 +165,18 @@ ${localFields.join('\n')}
       }
       case 'Array': {
         const arrayProp = propertyType as ArrayPropertyType
-        return `[${this.getGraphqlTypeFromPropertyType(arrayProp.MemberType).replace('!', '')}]`
+        const finalType = this.getGraphqlTypeFromPropertyType(arrayProp.MemberType).replace('!', '')
+
+        const inputToken = forInput && !this.isBaseType(finalType) ? 'Input' : ''
+        return `[${finalType}${inputToken}]`
       }
       case 'ModelReference': {
         const modelProp = propertyType as ModelReferenceType
-        if (modelProp.ModelType!.TypeName === 'Array') {
-          return `[${modelProp.ModelName}]`
+        const inputToken = forInput ? 'Input' : ''
+        if (modelProp.ModelType && modelProp.ModelType!.TypeName === 'Array') {
+          return `[${modelProp.ModelName}${inputToken}]`
         } else {
-          return `${modelProp.ModelName}${requiredToken}`
+          return `${modelProp.ModelName}${inputToken}`
         }
       }
       case 'Binary':
@@ -197,6 +201,23 @@ ${localFields.join('\n')}
 
       default:
         throw new Error(`Property type not supported in cradle-apollo-emitter: ${propertyTypeName}`)
+    }
+  }
+
+  private isBaseType(typeName: string) {
+    switch (typeName) {
+      case 'String':
+      case ' Boolean':
+      case 'Binary':
+      case 'DateTime':
+      case 'Integer':
+      case 'UniqueIdentifier':
+      case 'Decimal': {
+        return true
+      }
+      default: {
+        return false
+      }
     }
   }
 
