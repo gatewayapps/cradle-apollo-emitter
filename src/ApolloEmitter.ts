@@ -103,17 +103,14 @@ type Query {
     const fieldNames = Object.keys(model.Properties)
     const referenceNames = model.References ? Object.keys(model.References) : []
 
-    fieldNames.forEach((fn) => {
-      if (!this.options.options.shouldTypeIncludeProperty || this.options.options.shouldTypeIncludeProperty(model, fn, model.Properties[fn])) {
-        localFields.push(`\t${fn}: ${this.getGraphqlTypeFromPropertyType(model.Properties[fn])}`)
-      }
+    this.getIncludedPropertiesNames(model).forEach((fn) => {
+      localFields.push(`\t${fn}: ${this.getGraphqlTypeFromPropertyType(model.Properties[fn])}`)
     })
-    referenceNames.forEach((rn) => {
-      if (!this.options.options.shouldTypeIncludeReference || this.options.options.shouldTypeIncludeReference(model, rn, model.References[rn])) {
-        const referenceName =
-          model.References[rn]!.RelationType === 2 ? `[${model.References[rn]!.ForeignModel}]` : model.References[rn]!.ForeignModel
-        localFields.push(`\t${rn}: ${referenceName}`)
-      }
+    this.getIncludedReferencesNames(model).forEach((rn) => {
+      const referenceName = model.References[rn]!.RelationType === 2
+        ? `[${model.References[rn]!.ForeignModel}]`
+        : model.References[rn]!.ForeignModel
+      localFields.push(`\t${rn}: ${referenceName}`)
     })
 
     const typeDefs: string[] = []
@@ -239,9 +236,8 @@ ${resultParts.join('\n')}
   }
 
   private generateFilterInputType(model: CradleModel): string {
-    const propNames = Object.keys(model.Properties)
     const resultParts: string[] = []
-    propNames.forEach((pn) => {
+    this.getIncludedPropertiesNames(model).forEach((pn) => {
       const prop: PropertyType = model.Properties[pn]
       if (prop && prop.TypeName && ['DateTime', 'Decimal', 'Integer', 'String', 'Boolean', 'UniqueIdentifier'].find((x) => x === prop.TypeName)) {
         const gqlType = this.getGraphqlTypeFromPropertyType(prop.TypeName).replace('!', '')
@@ -361,10 +357,27 @@ ${resultParts.join('\n')}
     this.writeContentsToFile(apolloSchema, typeDefsPath)
   }
 
-  private getIdentifiersForModel(model: CradleModel): string[] {
+  private getIncludedPropertiesNames(model: CradleModel): string[] {
     const fieldNames = Object.keys(model.Properties)
+    if (this.options.options.shouldTypeIncludeProperty) {
+      const filterFunc = this.options.options.shouldTypeIncludeProperty
+      return fieldNames.filter((name) => filterFunc(model, name, model.Properties[name]))
+    }
+    return fieldNames
+  }
 
-    return fieldNames.filter((fn) => {
+  private getIncludedReferencesNames(model: CradleModel): string[] {
+    const referenceNames = model.References ? Object.keys(model.References) : []
+    if (this.options.options.shouldTypeIncludeReference) {
+      const filterFunc = this.options.options.shouldTypeIncludeReference
+      return referenceNames.filter((name) => filterFunc(model, name, model.References[name]))
+    }
+
+    return referenceNames
+  }
+
+  private getIdentifiersForModel(model: CradleModel): string[] {
+    return this.getIncludedPropertiesNames(model).filter((fn) => {
       const field = model.Properties[fn]
       return field && (field.IsPrimaryKey || field.Unique || field.TypeName === 'UniqueIdentifier') && !field.AllowNull
     })
