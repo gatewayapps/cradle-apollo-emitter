@@ -59,9 +59,9 @@ export default class ApolloEmitter implements ICradleEmitter {
 
     operationNames.forEach((opName) => {
       const operationArgs = this.getArgsTypeNameForOperation(opName)
-      mutationDefs.push(
-        `\t${opName}(data: ${operationArgs}!): ${this.getGraphqlTypeFromPropertyType(model.Operations[opName]!.Returns).replace('!', '')}`
-      )
+      const directive = this.getDirectiveForResolver(model, 'mutation', opName)
+      const returnType = this.getGraphqlTypeFromPropertyType(model.Operations[opName]!.Returns).replace('!', '')
+      mutationDefs.push(`\t${opName}(data: ${operationArgs}!): ${returnType} ${directive}`)
     })
 
     if (mutationDefs.length > 0) {
@@ -86,15 +86,19 @@ ${mutationDefs.join('\n')}
 \tcount: Int!
 }`
 
+    const queryDirective = this.getDirectiveForResolver(model, 'query', pluralQueryName)
+    const metaDirective = this.getDirectiveForResolver(model, 'query', `${pluralQueryName}Meta`)
+    const singularDirective = this.getDirectiveForResolver(model, 'query', singularQueryNameBase)
+
     return `
 ${collectionTypeDef}
 
 ${filterTypeDefs}
 
 type Query {
-\t${pluralQueryName}(offset: Int, limit: Int, filter: ${model.Name}Filter): [${model.Name}!]!
-\t${pluralQueryName}Meta(filter: ${model.Name}Filter): ${model.Name}Meta
-\t${singularQueryNameBase}(where: ${model.Name}UniqueFilter): ${model.Name}
+\t${pluralQueryName}(offset: Int, limit: Int, filter: ${model.Name}Filter): [${model.Name}!]! ${queryDirective}
+\t${pluralQueryName}Meta(filter: ${model.Name}Filter): ${model.Name}Meta ${metaDirective}
+\t${singularQueryNameBase}(where: ${model.Name}UniqueFilter): ${model.Name} ${singularDirective}
 }`
   }
 
@@ -199,6 +203,13 @@ ${localFields.join('\n')}
       default:
         throw new Error(`Property type not supported in cradle-apollo-emitter: ${propertyTypeName}`)
     }
+  }
+
+  private getDirectiveForResolver(model: CradleModel, resolverType: string, resolverName: string): string {
+    if (!this.options.options.getDirectiveForResolver) {
+      return ''
+    }
+    return this.options.options.getDirectiveForResolver(model, resolverType, resolverName)
   }
 
   private isBaseType(typeName: string) {
