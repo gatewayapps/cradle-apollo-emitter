@@ -14,5 +14,6 @@ export interface IApolloEmitterOptions {
   readonly shouldTypeIncludeProperty?: (model: CradleModel, propertyName: string, property: PropertyType) => boolean
   readonly shouldTypeIncludeReference?: (model: CradleModel, referenceName: string, modelReference: ModelReference) => boolean
   readonly shouldTypeIncludeOperation?: (model: CradleModel, operationName: string, operation: ICradleOperation) => boolean
+  readonly getDirectiveForResolver?: (model: CradleModel, resolverType: string, resolverName: string) => string
   readonly onComplete: (filesEmitted: string[]) => void
 }
