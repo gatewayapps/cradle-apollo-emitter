@@ -224,6 +224,9 @@ ${localFields.join('\n')}
         return true
       }
       default: {
+        if(typeName === 'ObjectID' && this.options.options.useMongoObjectIds ){
+          return true
+        }
         return false
       }
     }
