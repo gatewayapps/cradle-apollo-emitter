@@ -111,9 +111,7 @@ type Query {
       localFields.push(`\t${fn}: ${this.getGraphqlTypeFromPropertyType(model.Properties[fn])}`)
     })
     this.getIncludedReferencesNames(model).forEach((rn) => {
-      const referenceName = model.References[rn]!.RelationType === 2
-        ? `[${model.References[rn]!.ForeignModel}]`
-        : model.References[rn]!.ForeignModel
+      const referenceName = model.References[rn]!.RelationType === 2 ? `[${model.References[rn]!.ForeignModel}]` : model.References[rn]!.ForeignModel
       localFields.push(`\t${rn}: ${referenceName}`)
     })
 
@@ -224,7 +222,7 @@ ${localFields.join('\n')}
         return true
       }
       default: {
-        if(typeName === 'ObjectID' && this.options.options.useMongoObjectIds ){
+        if (typeName === 'ObjectID' && this.options.options.useMongoObjectIds) {
           return true
         }
         return false
