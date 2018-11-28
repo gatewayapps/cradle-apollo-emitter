@@ -1,4 +1,5 @@
 import { CradleModel, CradleSchema, EmitterOptions, IConsole, ICradleEmitter, ICradleOperation } from '@gatewayapps/cradle'
+import { RelationTypes } from '@gatewayapps/cradle/dist/lib/ModelReference'
 import ArrayPropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ArrayPropertyType'
 import ModelReferenceType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ModelReferenceType'
 import PropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/PropertyType'
@@ -287,6 +288,28 @@ ${resultParts.join('\n')}
         }
       }
     })
+
+    this.getIncludedReferencesNames(model).forEach((rn) => {
+      const r = model.References[rn]
+      const objectIdType = this.options.options.useMongoObjectIds ? 'ObjectID' : 'ID'
+      switch (r.RelationType) {
+        case RelationTypes.SingleOn:
+        case RelationTypes.Single: {
+          resultParts.push(`\t${rn}_equals: ${objectIdType}`)
+          resultParts.push(`\t${rn}_notEquals: ${objectIdType}`)
+          resultParts.push(`\t${rn}_in: [${objectIdType}]`)
+          return
+        }
+        case RelationTypes.Multiple:
+        case RelationTypes.MultipleVia: {
+          resultParts.push(`\t${rn}_equals: [${objectIdType}]`)
+          resultParts.push(`\t${rn}_notEquals: [${objectIdType}]`)
+          resultParts.push(`\t${rn}_contains: [${objectIdType}]`)
+          return
+        }
+      }
+    })
+
     if (resultParts.length > 0) {
       return `input ${model.Name}Filter {
   or: [${model.Name}Filter!]
