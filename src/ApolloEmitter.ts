@@ -23,12 +23,12 @@ class ApolloModel {
 
 export default class ApolloEmitter implements ICradleEmitter {
   public console?: IConsole
-  public options!: EmitterOptions<IApolloEmitterOptions>
+  public options!: IApolloEmitterOptions
 
   public getOperation
   private Models: ApolloModel[] = []
   private filesEmitted: string[] = []
-  public async prepareEmitter(options: EmitterOptions<IApolloEmitterOptions>, console: IConsole) {
+  constructor(options: IApolloEmitterOptions, console: IConsole) {
     this.console = console
     this.options = options
   }
@@ -38,7 +38,7 @@ export default class ApolloEmitter implements ICradleEmitter {
       if (this.shouldEmitModel(model)) {
         this.writeTypeDefsForModel(model)
 
-        if (this.shouldGenerateResolvers(model) && this.options.options.shouldOutputResolverFiles !== false) {
+        if (this.shouldGenerateResolvers(model) && this.options.shouldOutputResolverFiles !== false) {
           this.writeResolversForModel(model)
         }
       }
@@ -46,11 +46,11 @@ export default class ApolloEmitter implements ICradleEmitter {
 
     // write index.ts file for schema.
 
-    if (this.options.options.onComplete !== undefined) {
-      if (this.options.options.verbose) {
+    if (this.options.onComplete !== undefined) {
+      if (this.options.verbose) {
         this.console!.log(`Calling onComplete with [ ${this.filesEmitted.join(', ') || 'Empty Array'} ]`)
       }
-      this.options.options.onComplete(this.filesEmitted)
+      this.options.onComplete(this.filesEmitted)
     }
   }
 
@@ -192,7 +192,7 @@ ${localFields.join('\n')}
       case 'String':
         return `String${requiredToken}`
       case 'UniqueIdentifier': {
-        if (this.options.options.useMongoObjectIds) {
+        if (this.options.useMongoObjectIds) {
           return `ObjectID${requiredToken}`
         } else {
           return `ID${requiredToken}`
@@ -205,19 +205,19 @@ ${localFields.join('\n')}
   }
 
   private shouldEmitModel(model: CradleModel): boolean {
-    if (this.options.options.shouldEmitModel) {
-      return this.options.options.shouldEmitModel(model)
-    } else if (this.options.options.isModelToplevel) {
-      return this.options.options.isModelToplevel(model)
+    if (this.options.shouldEmitModel) {
+      return this.options.shouldEmitModel(model)
+    } else if (this.options.isModelToplevel) {
+      return this.options.isModelToplevel(model)
     }
     return true
   }
 
   private getDirectiveForResolver(model: CradleModel, resolverType: string, resolverName: string): string {
-    if (!this.options.options.getDirectiveForResolver) {
+    if (!this.options.getDirectiveForResolver) {
       return ''
     }
-    return this.options.options.getDirectiveForResolver(model, resolverType, resolverName)
+    return this.options.getDirectiveForResolver(model, resolverType, resolverName)
   }
 
   private isBaseType(typeName: string) {
@@ -232,7 +232,7 @@ ${localFields.join('\n')}
         return true
       }
       default: {
-        if (typeName === 'ObjectID' && this.options.options.useMongoObjectIds) {
+        if (typeName === 'ObjectID' && this.options.useMongoObjectIds) {
           return true
         }
         return false
@@ -300,7 +300,7 @@ ${resultParts.join('\n')}
 
     this.getIncludedReferencesNames(model).forEach((rn) => {
       const r = model.References[rn]
-      const objectIdType = this.options.options.useMongoObjectIds ? 'ObjectID' : 'ID'
+      const objectIdType = this.options.useMongoObjectIds ? 'ObjectID' : 'ID'
       switch (r.RelationType) {
         case RelationTypes.SingleOn:
         case RelationTypes.Single: {
@@ -341,9 +341,9 @@ ${resultParts.join('\n')}
     const singularQueryNameBase = _.camelCase(pluralize(model.Name, 1))
     const pluralQueryName = _.camelCase(pluralize(model.Name, 2))
 
-    const outputFilename = this.options.options.outputType === 'typescript' ? 'resolvers.ts' : 'resolvers.js'
+    const outputFilename = this.options.outputType === 'typescript' ? 'resolvers.ts' : 'resolvers.js'
 
-    const modelResolverFilePath = path.join(this.options.options.outputDirectory, model.Name, outputFilename)
+    const modelResolverFilePath = path.join(this.options.outputDirectory, model.Name, outputFilename)
     const queries: string[] = [pluralQueryName, `${pluralQueryName}Meta`, singularQueryNameBase]
     const mutations: string[] = []
     const references: string[] = []
@@ -366,7 +366,7 @@ ${resultParts.join('\n')}
       })
     }
 
-    const exportClause = this.options.options.outputType === 'typescript' ? 'export default' : 'module.exports ='
+    const exportClause = this.options.outputType === 'typescript' ? 'export default' : 'module.exports ='
 
     const resolverBody = `${exportClause} {
   Query: {
@@ -384,7 +384,7 @@ ${resultParts.join('\n')}
   }
 
   private shouldGenerateResolvers(model: CradleModel) {
-    return !this.options.options.shouldGenerateResolvers || this.options.options.shouldGenerateResolvers(model)
+    return !this.options.shouldGenerateResolvers || this.options.shouldGenerateResolvers(model)
   }
 
   private writeTypeDefsForModel(model: CradleModel) {
@@ -396,15 +396,15 @@ ${resultParts.join('\n')}
 
     const apolloSchema = _.compact([modelTypeDefs, modelQueries, modelMutations]).join('\n\n')
 
-    const typeDefsPath = join(this.options.options.outputDirectory, model.Name, 'typedefs.graphql')
+    const typeDefsPath = join(this.options.outputDirectory, model.Name, 'typedefs.graphql')
 
     this.writeContentsToFile(apolloSchema, typeDefsPath)
   }
 
   private getIncludedPropertiesNames(model: CradleModel): string[] {
     const fieldNames = Object.keys(model.Properties)
-    if (this.options.options.shouldTypeIncludeProperty) {
-      const filterFunc = this.options.options.shouldTypeIncludeProperty
+    if (this.options.shouldTypeIncludeProperty) {
+      const filterFunc = this.options.shouldTypeIncludeProperty
       return fieldNames.filter((name) => filterFunc(model, name, model.Properties[name]))
     }
     return fieldNames
@@ -412,8 +412,8 @@ ${resultParts.join('\n')}
 
   private getIncludedReferencesNames(model: CradleModel): string[] {
     const referenceNames = model.References ? Object.keys(model.References) : []
-    if (this.options.options.shouldTypeIncludeReference) {
-      const filterFunc = this.options.options.shouldTypeIncludeReference
+    if (this.options.shouldTypeIncludeReference) {
+      const filterFunc = this.options.shouldTypeIncludeReference
       return referenceNames.filter((name) => filterFunc(model, name, model.References[name]))
     }
 
@@ -438,10 +438,10 @@ ${resultParts.join('\n')}
    * @param path path to file
    */
   private writeContentsToFile(contents: string, filePath: string) {
-    if (existsSync(filePath) && !this.options.options.overwriteExisting) {
+    if (existsSync(filePath) && !this.options.overwriteExisting) {
       this.console!.warn(colors.gray(`Not writing ${filePath} as it already exists and overwrite existing is set to false.`))
     } else {
-      if (this.options.options.verbose) {
+      if (this.options.verbose) {
         this.console!.log(colors.green(`Writing to ${filePath}`))
         this.console!.log(colors.yellow(contents))
       }
