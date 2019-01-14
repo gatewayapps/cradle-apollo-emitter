@@ -35,7 +35,7 @@ export default class ApolloEmitter implements ICradleEmitter {
 
   public async emitSchema(schema: CradleSchema) {
     schema.Models.forEach((model) => {
-      if (!this.options.options.isModelToplevel || this.options.options.isModelToplevel(model)) {
+      if (this.shouldEmitModel(model)) {
         this.writeTypeDefsForModel(model)
 
         if (this.shouldGenerateResolvers(model) && this.options.options.shouldOutputResolverFiles !== false) {
@@ -202,6 +202,15 @@ ${localFields.join('\n')}
       default:
         throw new Error(`Property type not supported in cradle-apollo-emitter: ${propertyTypeName}`)
     }
+  }
+
+  private shouldEmitModel(model: CradleModel): boolean {
+    if (this.options.options.shouldEmitModel) {
+      return this.options.options.shouldEmitModel(model)
+    } else if (this.options.options.isModelToplevel) {
+      return this.options.options.isModelToplevel(model)
+    }
+    return true
   }
 
   private getDirectiveForResolver(model: CradleModel, resolverType: string, resolverName: string): string {
