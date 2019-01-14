@@ -8,6 +8,10 @@ export interface IApolloEmitterOptions {
   readonly verbose: boolean
   readonly outputType: string
   readonly useMongoObjectIds: boolean
+  readonly shouldEmitModel?: (model: CradleModel) => boolean
+  /**
+   * @deprecated since version 0.3.1
+   */
   readonly isModelToplevel?: (model: CradleModel) => boolean
   readonly shouldOutputResolverFiles: boolean
   readonly shouldGenerateResolvers?: (model: CradleModel) => boolean
