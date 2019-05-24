@@ -99,7 +99,7 @@ ${filterTypeDefs}
 
 type Query {
 \t${pluralQueryName}(offset: Int, limit: Int, filter: ${model.Name}Filter): [${model.Name}!]! ${queryDirective}
-\t${pluralQueryName}Meta(filter: ${model.Name}Filter): ${model.Name}Meta ${metaDirective}
+\t${pluralQueryName}Meta(filter: ${model.Name}Filter): ${model.Name}Meta! ${metaDirective}
 \t${singularQueryNameBase}(where: ${model.Name}UniqueFilter): ${model.Name} ${singularDirective}
 }`
   }
@@ -169,12 +169,12 @@ ${localFields.join('\n')}
         const finalType = this.getGraphqlTypeFromPropertyType(arrayProp.MemberType).replace('!', '')
 
         const inputToken = forInput && !this.isBaseType(finalType) ? 'Input' : ''
-        return `[${finalType}${inputToken}]`
+        return `[${finalType}${inputToken}!]${requiredToken}`
       }
       case 'ReferenceModel': {
         const modelProp = propertyType as ReferenceModelType
         const inputToken = forInput ? 'Input' : ''
-        return `${modelProp.ModelName}${inputToken}`
+        return `${modelProp.ModelName}${inputToken}${requiredToken}`
       }
       case 'Binary':
         return `String${requiredToken}`
@@ -220,7 +220,7 @@ ${localFields.join('\n')}
   private isBaseType(typeName: string) {
     switch (typeName) {
       case 'String':
-      case ' Boolean':
+      case 'Boolean':
       case 'Binary':
       case 'DateTime':
       case 'Integer':
