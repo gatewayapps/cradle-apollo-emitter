@@ -9,6 +9,7 @@ jobs:
   - script: |
       npm install
       npx tslint --project .
+      npx tsc
 
 - job: Publish
   pool:
