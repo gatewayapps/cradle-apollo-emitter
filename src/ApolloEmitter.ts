@@ -1,8 +1,9 @@
 import { CradleModel, CradleSchema, EmitterOptions, IConsole, ICradleEmitter, ICradleOperation } from '@gatewayapps/cradle'
-import { RelationTypes } from '@gatewayapps/cradle/dist/lib/ModelReference'
+
 import ArrayPropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ArrayPropertyType'
-import ModelReferenceType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ModelReferenceType'
+
 import PropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/PropertyType'
+import ReferenceModelType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ReferenceModelType'
 import colors from 'colors'
 import { existsSync, writeFileSync } from 'fs'
 import { ensureDirSync, writeFile } from 'fs-extra'
@@ -106,15 +107,15 @@ type Query {
   public getTypeDefsForModel(model: CradleModel): string {
     const localFields: string[] = []
     const fieldNames = Object.keys(model.Properties)
-    const referenceNames = model.References ? Object.keys(model.References) : []
+    // const referenceNames = model.References ? Object.keys(model.References) : []
 
     this.getIncludedPropertiesNames(model).forEach((fn) => {
       localFields.push(`\t${fn}: ${this.getGraphqlTypeFromPropertyType(model.Properties[fn])}`)
     })
-    this.getIncludedReferencesNames(model).forEach((rn) => {
-      const referenceName = model.References[rn]!.RelationType === 2 ? `[${model.References[rn]!.ForeignModel}]` : model.References[rn]!.ForeignModel
-      localFields.push(`\t${rn}: ${referenceName}`)
-    })
+    // this.getIncludedReferencesNames(model).forEach((rn) => {
+    //   const referenceName = model.References[rn]!.RelationType === 2 ? `[${model.References[rn]!.ForeignModel}]` : model.References[rn]!.ForeignModel
+    //   localFields.push(`\t${rn}: ${referenceName}`)
+    // })
 
     const typeDefs: string[] = []
     typeDefs.push(`type ${model.Name} {
@@ -170,14 +171,10 @@ ${localFields.join('\n')}
         const inputToken = forInput && !this.isBaseType(finalType) ? 'Input' : ''
         return `[${finalType}${inputToken}]`
       }
-      case 'ModelReference': {
-        const modelProp = propertyType as ModelReferenceType
+      case 'ReferenceModel': {
+        const modelProp = propertyType as ReferenceModelType
         const inputToken = forInput ? 'Input' : ''
-        if (modelProp.ModelType && modelProp.ModelType!.TypeName === 'Array') {
-          return `[${modelProp.ModelName}${inputToken}]`
-        } else {
-          return `${modelProp.ModelName}${inputToken}`
-        }
+        return `${modelProp.ModelName}${inputToken}`
       }
       case 'Binary':
         return `String${requiredToken}`
@@ -261,7 +258,7 @@ ${resultParts.join('\n')}
     const resultParts: string[] = []
     this.getIncludedPropertiesNames(model).forEach((pn) => {
       const prop: PropertyType = model.Properties[pn]
-      if (prop && prop.TypeName && ['DateTime', 'Decimal', 'Integer', 'String', 'Boolean', 'UniqueIdentifier'].find((x) => x === prop.TypeName)) {
+      if (prop && prop.TypeName && ['DateTime', 'Decimal', 'Integer', 'String', 'Boolean', 'UniqueIdentifier'].includes(prop.TypeName)) {
         const gqlType = this.getGraphqlTypeFromPropertyType(prop.TypeName).replace('!', '')
 
         switch (prop.TypeName) {
@@ -294,27 +291,6 @@ ${resultParts.join('\n')}
             resultParts.push(`\t${pn}_notEquals: ${gqlType}`)
             return
           }
-        }
-      }
-    })
-
-    this.getIncludedReferencesNames(model).forEach((rn) => {
-      const r = model.References[rn]
-      const objectIdType = this.options.useMongoObjectIds ? 'ObjectID' : 'ID'
-      switch (r.RelationType) {
-        case RelationTypes.SingleOn:
-        case RelationTypes.Single: {
-          resultParts.push(`\t${rn}_equals: ${objectIdType}`)
-          resultParts.push(`\t${rn}_notEquals: ${objectIdType}`)
-          resultParts.push(`\t${rn}_in: [${objectIdType}]`)
-          return
-        }
-        case RelationTypes.Multiple:
-        case RelationTypes.MultipleVia: {
-          resultParts.push(`\t${rn}_equals: [${objectIdType}]`)
-          resultParts.push(`\t${rn}_notEquals: [${objectIdType}]`)
-          resultParts.push(`\t${rn}_contains: [${objectIdType}]`)
-          return
         }
       }
     })
@@ -359,12 +335,12 @@ ${resultParts.join('\n')}
       })
     }
 
-    if (model.References) {
-      const referenceNames = Object.keys(model.References)
-      referenceNames.forEach((refName) => {
-        references.push(this.getStubMethodFor(refName))
-      })
-    }
+    // if (model.References) {
+    //   const referenceNames = Object.keys(model.References)
+    //   referenceNames.forEach((refName) => {
+    //     references.push(this.getStubMethodFor(refName))
+    //   })
+    // }
 
     const exportClause = this.options.outputType === 'typescript' ? 'export default' : 'module.exports ='
 
@@ -410,15 +386,15 @@ ${resultParts.join('\n')}
     return fieldNames
   }
 
-  private getIncludedReferencesNames(model: CradleModel): string[] {
-    const referenceNames = model.References ? Object.keys(model.References) : []
-    if (this.options.shouldTypeIncludeReference) {
-      const filterFunc = this.options.shouldTypeIncludeReference
-      return referenceNames.filter((name) => filterFunc(model, name, model.References[name]))
-    }
+  // private getIncludedReferencesNames(model: CradleModel): string[] {
+  //   const referenceNames = model.References ? Object.keys(model.References) : []
+  //   if (this.options.shouldTypeIncludeReference) {
+  //     const filterFunc = this.options.shouldTypeIncludeReference
+  //     return referenceNames.filter((name) => filterFunc(model, name, model.References[name]))
+  //   }
 
-    return referenceNames
-  }
+  //   return referenceNames
+  // }
 
   private getIdentifiersForModel(model: CradleModel): string[] {
     return this.getIncludedPropertiesNames(model).filter((fn) => {
