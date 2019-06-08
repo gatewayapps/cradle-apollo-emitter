@@ -2,6 +2,7 @@ import { CradleModel, CradleSchema, EmitterOptions, IConsole, ICradleEmitter, IC
 
 import ArrayPropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ArrayPropertyType'
 
+import ImportModelType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ImportModelType'
 import PropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/PropertyType'
 import ReferenceModelType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ReferenceModelType'
 import colors from 'colors'
@@ -170,6 +171,11 @@ ${localFields.join('\n')}
 
         const inputToken = forInput && !this.isBaseType(finalType) ? 'Input' : ''
         return `[${finalType}${inputToken}!]${requiredToken}`
+      }
+      case 'ImportModel': {
+        const modelProp = propertyType as ImportModelType
+        const inputToken = forInput ? 'Input' : ''
+        return `${modelProp.ModelName}${inputToken}${requiredToken}`
       }
       case 'ReferenceModel': {
         const modelProp = propertyType as ReferenceModelType
