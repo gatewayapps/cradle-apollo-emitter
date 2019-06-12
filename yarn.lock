@@ -18,16 +18,16 @@
     esutils "^2.0.2"
     js-tokens "^4.0.0"
 
-"@gatewayapps/cradle-file-emitter@^1.0.0-alpha.2":
-  version "1.0.1"
-  resolved "https://registry.yarnpkg.com/@gatewayapps/cradle-file-emitter/-/cradle-file-emitter-1.0.1.tgz#29ec22d18d26d08d7b8fd2e4ccfcfa0b7a68be81"
-  integrity sha512-3Vr11bqMkGVZhcj/jEQmLy+IQt2RvmSUW6601f8msHN1gQj/TBKAMoEfRdFslVaAGnCZLUSB2OJZZnuxL+XwCg==
+"@gatewayapps/cradle-file-emitter@^1.0.0-alpha.3":
+  version "1.0.0-alpha.3"
+  resolved "https://registry.yarnpkg.com/@gatewayapps/cradle-file-emitter/-/cradle-file-emitter-1.0.0-alpha.3.tgz#b629217aa3087ff082d8829869fdfc667c647ddd"
+  integrity sha512-KjDXH84GW7mrJeOXO5RB6KbWAGIeunwNLrqA9Y6gfO1+J2RtSBd3okc56sVGBcxE4My6Qiv9t9fTFDVcoihgGg==
   dependencies:
-    "@gatewayapps/cradle" "^1.0.0-alpha.5"
+    "@gatewayapps/cradle" "^1.0.0-alpha.7"
     fs-extra "^8.0.1"
     prettier "^1.18.2"
 
-"@gatewayapps/cradle@^1.0.0-alpha.5", "@gatewayapps/cradle@^1.0.0-alpha.7":
+"@gatewayapps/cradle@^1.0.0-alpha.7":
   version "1.0.0-alpha.7"
   resolved "https://registry.yarnpkg.com/@gatewayapps/cradle/-/cradle-1.0.0-alpha.7.tgz#5a6ba08e8f9b76e4c6ea8c8a51d83819ab6cfefa"
   integrity sha512-IbTjdkE3m9CzcAMK+SPtPjZ6papDhqRCTE47lIpkpLV+uMTfpCeovbKVTWc2/zbapaxXd6ycCvNf4T4b2jOsAA==

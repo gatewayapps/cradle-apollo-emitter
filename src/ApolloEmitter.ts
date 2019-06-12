@@ -8,7 +8,7 @@ import {
   PropertyType,
   ReferenceModelType
 } from '@gatewayapps/cradle'
-import { FileEmitter, FileEmitterOptionsArgs } from '@gatewayapps/cradle-file-emitter'
+import { FileEmitter, FileEmitterOptionsArgs } from '@gatewayapps/cradle-file-emitter' 
 
 import _ from 'lodash'
 
