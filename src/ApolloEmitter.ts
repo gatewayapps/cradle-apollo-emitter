@@ -8,7 +8,7 @@ import {
   PropertyType,
   ReferenceModelType
 } from '@gatewayapps/cradle'
-import { FileEmitter, FileEmitterOptionsArgs } from '@gatewayapps/cradle-file-emitter' 
+import { FileEmitter, FileEmitterOptionsArgs } from '@gatewayapps/cradle-file-emitter'
 
 import _ from 'lodash'
 
@@ -30,6 +30,12 @@ export default class ApolloEmitter extends FileEmitter {
   private filesEmitted: string[] = []
   constructor(options: FileEmitterOptionsArgs, output: string, console: IConsole) {
     super(options, output, console)
+    if (options.formatting === 'prettier') {
+      const prettierConfig = options.prettierConfig || {}
+      prettierConfig.parser = 'graphql'
+      options.prettierConfig = prettierConfig
+    }
+    this.options = options
   }
   public async getContentsForModel(model: CradleModel): Promise<string> {
     const modelTypeDefs = this.getTypeDefsForModel(model)
