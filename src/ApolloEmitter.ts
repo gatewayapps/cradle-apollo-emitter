@@ -1,17 +1,18 @@
-import { CradleModel, CradleSchema, EmitterOptions, IConsole, ICradleEmitter, ICradleOperation } from '@gatewayapps/cradle'
+import {
+  ArrayPropertyType,
+  CradleModel,
+  CradleSchema,
+  IConsole,
+  ICradleOperation,
+  ImportModelType,
+  PropertyType,
+  ReferenceModelType
+} from '@gatewayapps/cradle'
+import { FileEmitter, FileEmitterOptionsArgs } from '@gatewayapps/cradle-file-emitter'
 
-import ArrayPropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ArrayPropertyType'
-
-import ImportModelType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ImportModelType'
-import PropertyType from '@gatewayapps/cradle/dist/lib/PropertyTypes/PropertyType'
-import ReferenceModelType from '@gatewayapps/cradle/dist/lib/PropertyTypes/ReferenceModelType'
-import colors from 'colors'
-import { existsSync, writeFileSync } from 'fs'
-import { ensureDirSync, writeFile } from 'fs-extra'
 import _ from 'lodash'
-import path, { dirname, extname, join } from 'path'
+
 import pluralize from 'pluralize'
-import { IApolloEmitterOptions } from './IApolloEmitterOptions'
 
 class ApolloModel {
   public Schema: string
@@ -23,37 +24,74 @@ class ApolloModel {
   }
 }
 
-export default class ApolloEmitter implements ICradleEmitter {
-  public console?: IConsole
-  public options!: IApolloEmitterOptions
-
+export default class ApolloEmitter extends FileEmitter {
   public getOperation
   private Models: ApolloModel[] = []
   private filesEmitted: string[] = []
-  constructor(options: IApolloEmitterOptions, console: IConsole) {
-    this.console = console
-    this.options = options
+  constructor(options: FileEmitterOptionsArgs, output: string, console: IConsole) {
+    super(options, output, console)
   }
+  public async getContentsForModel(model: CradleModel): Promise<string> {
+    const modelTypeDefs = this.getTypeDefsForModel(model)
 
-  public async emitSchema(schema: CradleSchema) {
-    schema.Models.forEach((model) => {
-      if (this.shouldEmitModel(model)) {
-        this.writeTypeDefsForModel(model)
+    const modelQueries = this.getQueryDefsForModel(model)
 
-        if (this.shouldGenerateResolvers(model) && this.options.shouldOutputResolverFiles !== false) {
-          this.writeResolversForModel(model)
+    const modelMutations = this.getMutationDefsForModel(model)
+
+    const apolloSchema = _.compact([modelTypeDefs, modelQueries, modelMutations]).join('\n\n')
+
+    return apolloSchema
+  }
+  public async mergeFileContents(modelFileContents: any[]): Promise<string> {
+    const generalOutput: string[] = []
+    const queryOutput: string[] = []
+    const mutationOutput: string[] = []
+
+    for (const mfc of modelFileContents) {
+      const contentParts: string[] = mfc.contents.split('\n')
+      let inQuery = false
+      let inMutation = false
+
+      for (const line of contentParts) {
+        if (line.includes('type Query {')) {
+          inQuery = true
+          continue
+        }
+        if (line.includes('type Mutation {')) {
+          inMutation = true
+          continue
+        }
+        if ((inQuery || inMutation) && line.includes('}')) {
+          inQuery = false
+          inMutation = false
+          continue
+        }
+
+        if (inQuery) {
+          queryOutput.push(line)
+        }
+        if (inMutation) {
+          mutationOutput.push(line)
+        }
+        if (!inQuery && !inMutation) {
+          generalOutput.push(line)
         }
       }
-    })
-
-    // write index.ts file for schema.
-
-    if (this.options.onComplete !== undefined) {
-      if (this.options.verbose) {
-        this.console!.log(`Calling onComplete with [ ${this.filesEmitted.join(', ') || 'Empty Array'} ]`)
-      }
-      this.options.onComplete(this.filesEmitted)
     }
+
+    return `
+scalar Date
+
+type Query {
+${queryOutput.join('\n')}
+    }
+
+type Mutation {
+${mutationOutput.join('\n')}
+}
+
+${generalOutput.join('\n')}
+    `
   }
 
   public getMutationDefsForModel(model: CradleModel): string {
@@ -62,9 +100,8 @@ export default class ApolloEmitter implements ICradleEmitter {
 
     operationNames.forEach((opName) => {
       const operationArgs = this.getArgsTypeNameForOperation(opName)
-      const directive = this.getDirectiveForResolver(model, 'mutation', opName)
       const returnType = this.getGraphqlTypeFromPropertyType(model.Operations[opName]!.Returns).replace('!', '')
-      mutationDefs.push(`\t${opName}(data: ${operationArgs}!): ${returnType} ${directive}`)
+      mutationDefs.push(`\t${opName}(data: ${operationArgs}!): ${returnType}`)
     })
 
     if (mutationDefs.length > 0) {
@@ -89,19 +126,15 @@ ${mutationDefs.join('\n')}
 \tcount: Int!
 }`
 
-    const queryDirective = this.getDirectiveForResolver(model, 'query', pluralQueryName)
-    const metaDirective = this.getDirectiveForResolver(model, 'query', `${pluralQueryName}Meta`)
-    const singularDirective = this.getDirectiveForResolver(model, 'query', singularQueryNameBase)
-
     return `
 ${collectionTypeDef}
 
 ${filterTypeDefs}
 
 type Query {
-\t${pluralQueryName}(offset: Int, limit: Int, filter: ${model.Name}Filter): [${model.Name}!]! ${queryDirective}
-\t${pluralQueryName}Meta(filter: ${model.Name}Filter): ${model.Name}Meta! ${metaDirective}
-\t${singularQueryNameBase}(where: ${model.Name}UniqueFilter): ${model.Name} ${singularDirective}
+\t${pluralQueryName}(offset: Int, limit: Int, filter: ${model.Name}Filter): [${model.Name}!]!
+\t${pluralQueryName}Meta(filter: ${model.Name}Filter): ${model.Name}Meta!
+\t${singularQueryNameBase}(where: ${model.Name}UniqueFilter): ${model.Name}
 }`
   }
 
@@ -110,7 +143,7 @@ type Query {
     const fieldNames = Object.keys(model.Properties)
     // const referenceNames = model.References ? Object.keys(model.References) : []
 
-    this.getIncludedPropertiesNames(model).forEach((fn) => {
+    fieldNames.forEach((fn) => {
       localFields.push(`\t${fn}: ${this.getGraphqlTypeFromPropertyType(model.Properties[fn])}`)
     })
     // this.getIncludedReferencesNames(model).forEach((rn) => {
@@ -195,32 +228,12 @@ ${localFields.join('\n')}
       case 'String':
         return `String${requiredToken}`
       case 'UniqueIdentifier': {
-        if (this.options.useMongoObjectIds) {
-          return `ObjectID${requiredToken}`
-        } else {
-          return `ID${requiredToken}`
-        }
+        return `ID${requiredToken}`
       }
 
       default:
         throw new Error(`Property type not supported in cradle-apollo-emitter: ${propertyTypeName}`)
     }
-  }
-
-  private shouldEmitModel(model: CradleModel): boolean {
-    if (this.options.shouldEmitModel) {
-      return this.options.shouldEmitModel(model)
-    } else if (this.options.isModelToplevel) {
-      return this.options.isModelToplevel(model)
-    }
-    return true
-  }
-
-  private getDirectiveForResolver(model: CradleModel, resolverType: string, resolverName: string): string {
-    if (!this.options.getDirectiveForResolver) {
-      return ''
-    }
-    return this.options.getDirectiveForResolver(model, resolverType, resolverName)
   }
 
   private isBaseType(typeName: string) {
@@ -235,9 +248,6 @@ ${localFields.join('\n')}
         return true
       }
       default: {
-        if (typeName === 'ObjectID' && this.options.useMongoObjectIds) {
-          return true
-        }
         return false
       }
     }
@@ -262,7 +272,8 @@ ${resultParts.join('\n')}
 
   private generateFilterInputType(model: CradleModel): string {
     const resultParts: string[] = []
-    this.getIncludedPropertiesNames(model).forEach((pn) => {
+    const propertyNames = Object.keys(model.Properties)
+    propertyNames.forEach((pn) => {
       const prop: PropertyType = model.Properties[pn]
       if (prop && prop.TypeName && ['DateTime', 'Decimal', 'Integer', 'String', 'Boolean', 'UniqueIdentifier'].includes(prop.TypeName)) {
         const gqlType = this.getGraphqlTypeFromPropertyType(prop.TypeName).replace('!', '')
@@ -312,86 +323,6 @@ ${resultParts.join('\n')}
     }
   }
 
-  private getStubMethodFor(methodName: string): string {
-    return `${methodName}: (obj, args, context, info) => {
-      // Insert your ${methodName} implementation here
-      throw new Error('${methodName} is not implemented')
-    }`
-  }
-
-  private writeResolversForModel(model: CradleModel) {
-    const singularQueryNameBase = _.camelCase(pluralize(model.Name, 1))
-    const pluralQueryName = _.camelCase(pluralize(model.Name, 2))
-
-    const outputFilename = this.options.outputType === 'typescript' ? 'resolvers.ts' : 'resolvers.js'
-
-    const modelResolverFilePath = path.join(this.options.outputDirectory, model.Name, outputFilename)
-    const queries: string[] = [pluralQueryName, `${pluralQueryName}Meta`, singularQueryNameBase]
-    const mutations: string[] = []
-    const references: string[] = []
-
-    queries.forEach((q, qi) => {
-      queries[qi] = this.getStubMethodFor(q)
-    })
-
-    if (model.Operations) {
-      const operationNames = Object.keys(model.Operations)
-      operationNames.forEach((opName) => {
-        mutations.push(this.getStubMethodFor(opName))
-      })
-    }
-
-    // if (model.References) {
-    //   const referenceNames = Object.keys(model.References)
-    //   referenceNames.forEach((refName) => {
-    //     references.push(this.getStubMethodFor(refName))
-    //   })
-    // }
-
-    const exportClause = this.options.outputType === 'typescript' ? 'export default' : 'module.exports ='
-
-    const resolverBody = `${exportClause} {
-  Query: {
-    ${queries.join(',\n')}
-  },
-  Mutation: {
-    ${mutations.join(',\n')}
-  },
-  ${model.Name}: {
-    ${references.join(',\n')}
-  }
-}
-    `
-    this.writeContentsToFile(resolverBody, modelResolverFilePath)
-  }
-
-  private shouldGenerateResolvers(model: CradleModel) {
-    return !this.options.shouldGenerateResolvers || this.options.shouldGenerateResolvers(model)
-  }
-
-  private writeTypeDefsForModel(model: CradleModel) {
-    const modelTypeDefs = this.getTypeDefsForModel(model)
-
-    const modelQueries = this.shouldGenerateResolvers(model) && this.getQueryDefsForModel(model)
-
-    const modelMutations = this.shouldGenerateResolvers(model) && this.getMutationDefsForModel(model)
-
-    const apolloSchema = _.compact([modelTypeDefs, modelQueries, modelMutations]).join('\n\n')
-
-    const typeDefsPath = join(this.options.outputDirectory, model.Name, 'typedefs.graphql')
-
-    this.writeContentsToFile(apolloSchema, typeDefsPath)
-  }
-
-  private getIncludedPropertiesNames(model: CradleModel): string[] {
-    const fieldNames = Object.keys(model.Properties)
-    if (this.options.shouldTypeIncludeProperty) {
-      const filterFunc = this.options.shouldTypeIncludeProperty
-      return fieldNames.filter((name) => filterFunc(model, name, model.Properties[name]))
-    }
-    return fieldNames
-  }
-
   // private getIncludedReferencesNames(model: CradleModel): string[] {
   //   const referenceNames = model.References ? Object.keys(model.References) : []
   //   if (this.options.shouldTypeIncludeReference) {
@@ -403,34 +334,14 @@ ${resultParts.join('\n')}
   // }
 
   private getIdentifiersForModel(model: CradleModel): string[] {
-    return this.getIncludedPropertiesNames(model).filter((fn) => {
-      const field = model.Properties[fn]
+    const propNames = Object.keys(model.Properties)
+    return propNames.filter((propName) => {
+      const field = model.Properties[propName]
       return field && (field.IsPrimaryKey || field.Unique || field.TypeName === 'UniqueIdentifier') && !field.AllowNull
     })
   }
 
   private getArgsTypeNameForOperation(operationName: string): string {
     return `${_.startCase(operationName).replace(/\s/g, '')}Args`
-  }
-
-  /**
-   * Writes contents to path and adds path to emittedFiles array.  If overwriteExisting is false and the file DOES already exist
-   * this method does nothing
-   * @param contents contents of file to write
-   * @param path path to file
-   */
-  private writeContentsToFile(contents: string, filePath: string) {
-    if (existsSync(filePath) && !this.options.overwriteExisting) {
-      this.console!.warn(colors.gray(`Not writing ${filePath} as it already exists and overwrite existing is set to false.`))
-    } else {
-      if (this.options.verbose) {
-        this.console!.log(colors.green(`Writing to ${filePath}`))
-        this.console!.log(colors.yellow(contents))
-      }
-      const dir = dirname(filePath)
-      ensureDirSync(dir)
-      writeFileSync(filePath, contents, 'utf8')
-      this.filesEmitted.push(filePath)
-    }
   }
 }

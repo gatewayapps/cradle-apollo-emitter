@@ -18,10 +18,19 @@
     esutils "^2.0.2"
     js-tokens "^4.0.0"
 
-"@gatewayapps/cradle@^1.0.0-alpha.2":
+"@gatewayapps/cradle-file-emitter@^1.0.0-alpha.2":
   version "1.0.0-alpha.2"
-  resolved "https://registry.yarnpkg.com/@gatewayapps/cradle/-/cradle-1.0.0-alpha.2.tgz#fa66ac52f31a3f1f4212a4fd0b9121414b4f8f65"
-  integrity sha512-GiBBzYInDWaKC88/1QicUREdkqxmQIJczKKIr2Y99k4V8bg+8d3Jts2ID/C2Q1OLE2QKHxvB4k/Y9+NGReyviQ==
+  resolved "https://registry.yarnpkg.com/@gatewayapps/cradle-file-emitter/-/cradle-file-emitter-1.0.0-alpha.2.tgz#d7fe1f98c056c11634cfd43ba0da65d088f44012"
+  integrity sha512-qGAcemKeUP0caq3jMyy4TPSxzCceIe2lpBSvLDehaBZY895prKckv6+PY48uq83rrhboDDcEW0VIEv3yrBjl0g==
+  dependencies:
+    "@gatewayapps/cradle" "^1.0.0-alpha.5"
+    fs-extra "^8.0.1"
+    prettier "^1.18.2"
+
+"@gatewayapps/cradle@^1.0.0-alpha.5":
+  version "1.0.0-alpha.5"
+  resolved "https://registry.yarnpkg.com/@gatewayapps/cradle/-/cradle-1.0.0-alpha.5.tgz#32a49df4da761d4a671e6b3297ef91338298bea1"
+  integrity sha512-pgTFZ9FEAMLge4AlVvL3ngoACtlgxV8YIP0SQHkw45Rxpp2SJdXtnaJaxz3j8a/gVAre9RBgnu2xcMmIfDE7pA==
   dependencies:
     chevrotain "^3.7.4"
     colors "^1.3.2"
@@ -517,6 +526,15 @@ fs-extra@^7.0.0:
   version "7.0.1"
   resolved "https://registry.yarnpkg.com/fs-extra/-/fs-extra-7.0.1.tgz#4f189c44aa123b895f722804f55ea23eadc348e9"
   integrity sha512-YJDaCJZEnBmcbw13fvdAM9AwNOJwOzrE4pqMqBq5nFiEqXUqHwlK4B+3pUw6JNvfSPtX05xFHtYy/1ni01eGCw==
+  dependencies:
+    graceful-fs "^4.1.2"
+    jsonfile "^4.0.0"
+    universalify "^0.1.0"
+
+fs-extra@^8.0.1:
+  version "8.0.1"
+  resolved "https://registry.yarnpkg.com/fs-extra/-/fs-extra-8.0.1.tgz#90294081f978b1f182f347a440a209154344285b"
+  integrity sha512-W+XLrggcDzlle47X/XnS7FXrXu9sDo+Ze9zpndeBxdgv88FHLm1HtmkhEwavruS6koanBjp098rUpHs65EmG7A==
   dependencies:
     graceful-fs "^4.1.2"
     jsonfile "^4.0.0"
@@ -1187,6 +1205,11 @@ prettier@^1.14.3:
   version "1.17.1"
   resolved "https://registry.yarnpkg.com/prettier/-/prettier-1.17.1.tgz#ed64b4e93e370cb8a25b9ef7fef3e4fd1c0995db"
   integrity sha512-TzGRNvuUSmPgwivDqkZ9tM/qTGW9hqDKWOE9YHiyQdixlKbv7kvEqsmDPrcHJTKwthU774TQwZXVtaQ/mMsvjg==
+
+prettier@^1.18.2:
+  version "1.18.2"
+  resolved "https://registry.yarnpkg.com/prettier/-/prettier-1.18.2.tgz#6823e7c5900017b4bd3acf46fe9ac4b4d7bda9ea"
+  integrity sha512-OeHeMc0JhFE9idD4ZdtNibzY0+TPHSpSSb9h8FqtP+YnoZZ1sl8Vc9b1sasjfymH3SonAF4QcA2+mzHPhMvIiw==
 
 pseudomap@^1.0.2:
   version "1.0.2"
