@@ -29,7 +29,7 @@
     "typescript": "^3.1.3"
   },
   "dependencies": {
-    "@gatewayapps/cradle": "^1.0.0-alpha.7",
+    "@gatewayapps/cradle": "^1.0.0-alpha.8",
     "@gatewayapps/cradle-file-emitter": "^1.0.0-alpha.3",
     "colors": "^1.3.2",
     "fs-extra": "^7.0.0",

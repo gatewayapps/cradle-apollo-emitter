@@ -85,16 +85,26 @@ export default class ApolloEmitter extends FileEmitter {
       }
     }
 
+    const mutationClause =
+      mutationOutput.length > 0
+        ? `type Mutation {
+      ${mutationOutput.join('\n')}
+}`
+        : ''
+
+    const queryClause =
+      queryOutput.length > 0
+        ? `type Query {
+  ${queryOutput.join('\n')}
+}`
+        : ''
+
     return `
 scalar Date
 
-type Query {
-${queryOutput.join('\n')}
-    }
+${queryClause}
 
-type Mutation {
-${mutationOutput.join('\n')}
-}
+${mutationClause}
 
 ${generalOutput.join('\n')}
     `
