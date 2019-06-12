@@ -1,5 +1,5 @@
 {
-  "name": "@gatewayapps/cradle-apollo-emitter",
+  "name": "@gatewayapps/cradle-graphql-emitter",
   "version": "1.0.0-alpha.4",
   "description": "",
   "main": "./dist/index.js",
