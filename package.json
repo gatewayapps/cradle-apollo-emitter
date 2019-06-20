@@ -1,6 +1,6 @@
 {
   "name": "@gatewayapps/cradle-graphql-emitter",
-  "version": "1.0.0-alpha.6",
+  "version": "1.0.0-alpha.7",
   "description": "",
   "main": "./dist/index.js",
   "scripts": {
@@ -29,8 +29,8 @@
     "typescript": "^3.1.3"
   },
   "dependencies": {
-    "@gatewayapps/cradle": "^1.0.0-alpha.8",
-    "@gatewayapps/cradle-file-emitter": "^1.0.0-alpha.3",
+    "@gatewayapps/cradle": "^1.0.0-alpha.9",
+    "@gatewayapps/cradle-file-emitter": "^1.0.0-alpha.6",
     "colors": "^1.3.2",
     "fs-extra": "^7.0.0",
     "lodash": "^4.17.11",
